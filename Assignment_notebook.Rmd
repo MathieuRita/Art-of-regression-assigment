@@ -1,0 +1,179 @@
+---
+title: "Assignment - regression in R"
+output: html_notebook
+---
+This part is made written in english because of the character encoding of R.
+
+We first load the dataset.
+
+```{r}
+library(datasets)
+data(pressure)
+pp=pressure$pressure
+pt=pressure$temperature
+logpp=log(pressure$pressure)
+logpt=log(pressure$temperature)
+```
+
+# __Question 1__
+
+Between question 1 and 4, we will try this simple linear model :
+$$
+log(P)=\beta_{0} + \beta_{1}.log(T) + \epsilon
+$$
+
+# __Question 2__
+
+Here is the plot representing :
+$$
+log(P)=f(log(T))
+$$
+```{r}
+plot(logpt, logpp,col="red",xlab='log(T)',ylab='log(P)')
+```
+
+We can see that the simple linear model seems to fit the data from a certain rank (log(T)>5). Therefore, the model seems reasonable for large values of log(T).
+Nevertheless it is necessary to include other regressors to better fit the data for lower values of log(T). Moreover, a line will not be able to fit the bending of the data.
+
+# __Question 3__
+
+We estimate the coefficients of regression calling the function lm:
+
+```{r}
+# The first value of pt is equal to 0. Thus, we exclude the first value of loggpp and logpt
+logpp<-logpp[c(2:19)]
+logpt<- logpt[c(2:19)]
+# Linear regression
+linreg=lm( logpp~logpt )
+summary(linreg)
+
+paste("R-squared=",summary(linreg)$r.squared, ";", "Adjusted R-squared=",summary(linreg)$adj.r.squared, ";","Standard deviation=",summary(linreg)$sigma)
+```
+
+The F-statistic shows that it is quite a good fitting (in term of values) : the p-value is low. Nevertheless, this low value can be improved by including other variables. 
+Moreover, the SSE, the adjusted SEE and especially the standard deviation can be well improved. 
+
+The study of the plot representing the residuals VS fitted values also shows some problems :
+```{r}
+plot(linreg$fitted.values,linreg$residuals,xlab="Fitted Values",ylab="Residuals")
+lines(c(-10:8),0*c(-10:8),col="red")
+```
+It displays that the residuals are positive for very small fitted values, negative in the middle and positive for large fitted values. It confirms the idea mentionned in the previous question : the linear model can't fit the data since the relationship between log(P) and log(T) is curved.
+
+These observations can be verified by plotting the data and the fitted model :
+
+```{r}
+appro=linreg$coefficients[1]+linreg$coefficients[2]*logpt
+
+plot(logpt, logpp,col="red",type="p",xlab='log(T)',ylab='log(P)')
+lines(logpt, appro,type="p",col="blue",pch=2)
+legend("topleft", legend=c("Original data", "Regression model"),col=c("red", "blue"),pch=c(1,2))
+```
+It is impossible for the linear model to fit the bending of the original data. This bending introduces some differences between the data and model that explain the values of SEEs and standard deviation.
+
+# __Question 4__
+
+We compute the prediction for T=90 and T=230 with their confidence interval. 
+
+```{r}
+new = data.frame(logpt=c(log(90),log(230)))
+pred=predict(linreg,newdata=new,interval="confidence")
+pred=exp(pred)
+pred
+```
+
+We can see that the confidence interval is large. It can be explained by the short number of regressors and the high value of standard deviation. 
+
+Thus, here is the plot of the data with the predictions with their confidence interval:
+
+```{r}
+df <- data.frame(x=c(90,230),
+                 P =c(0.3773525,42.1489912),
+                 L =c(0.2480383,28.3363527),
+                 U =c(0.5740843,62.6946409))
+df2 <- data.frame(x=pt,y=pp)
+
+ggplot()+geom_point(data=df, aes(x=x, y=P), color='green') + geom_errorbar(data=df,aes(x=x, ymax = U, ymin = L))+
+geom_point(data=df2, aes(x=x, y=y), color='red')
+```
+
+The data are represented in red while the predictions are in green (with their confidence interval). We see, with the prediction for T=230 that the confidence interval is large.
+
+# __Question 5__
+
+We now want to test the following multiple linear regression model:
+$$
+log(P)=\beta_{0}+\beta_{1}.log(T)+\beta_{2}/T+\epsilon
+$$
+
+We want to compare this model with the previous one. Therefore, we realize a new linear regression with the regressors : log(T) and 1/T :
+```{r}
+#Creation of the new regressors
+ipt<-1/pt[c(2:19)]
+linreg2=lm(logpp ~ logpt + ipt)
+summary(linreg2)
+```
+
+Firstly, we can notice that we obtain a better fit of the data than we the first model :
+
+```{r}
+paste("R-squared=",summary(linreg2)$r.squared, ";", "Adjusted R-squared=",summary(linreg2)$adj.r.squared, ";","Standard deviation=",summary(linreg2)$sigma)
+```
+The standard deviation is way lower and the SEEs are better.
+
+Nevertheless, this result is obvious since this new model is including more regressors than the previous one. This criteria is not enough to select the best model. Thus, we choose to compute the AIC and BIC to better compare these models :
+
+```{r}
+paste("1st model :","AIC=",AIC(linreg), "BIC=",BIC(linreg),"/////","2nd model :","AIC=",AIC(linreg2), "BIC=",BIC(linreg2))
+```
+The AIC and BIC are lower for the second model, even if it includes a larger number of regressors. Therefore, following these criteria, we can say that the second model is better than the first one.
+
+Here is a representation of our new model, compared with the original data :
+```{r}
+model2=linreg2$coefficients[1]+logpt*linreg2$coefficients[2]+(linreg2$coefficients[3]/pt[c(2:19)])
+plot(pt[c(2:19)], logpp,col="red",type="p",xlab='T',ylab='log(P)')
+lines(pt[c(2:19)], model2,type="p",col="blue",pch=2)
+legend("topleft", legend=c("Original data", "2nd model"),col=c("red", "blue"),pch=c(1,2))
+```
+It shows that our model fits well the data and its bending.
+
+NB. It is not the question here but to comment this model it would be necessary to look at the residuals to see whether the residuals are randomly distributed on each part of the 0 line.
+
+# __Question 6__
+
+We perform here a multiple linear regression of log(P) with the regressors :
+
+$$
+log(T), 1/T, 1/T^{2},T
+$$
+```{r}
+ipt2=ipt**2
+linreg3=lm(logpp ~ logpt + ipt + ipt2 + pt[c(2:19)])
+summary(linreg3)
+confint(linreg3,parm="pt[c(2:19)]",level = 0.95)
+```
+We want to know whether the regressor T is useless or not.
+
+The t-value helps us to test the hypothesis :
+$$
+H_{0}:\beta_{T}=0 \space \space VS \space \space H_{1}: \beta_{T} \ne 0 
+$$
+
+Here, we want to know whether we can accept the hypothesis that the variable T is useless at the confidence level 5%. 
+
+Our t-value is equal to -1.076. We have to compare it with the quantile of order 97,5% of the student law (we admit that the error is following a normal law) of parameter 13 (n-k-1 : where n=18 ; k=4). We can find in a table that : 
+
+$$
+c_{0.975}=2,160
+$$
+
+Therefore, since :
+$$
+|t_{\hat{\beta_{T}}}|=1.076< 2.160 = c_{0.975}
+$$
+We can conclude that that the variable T is useless at the confidence level 5%.
+
+NB. This is confirmed by the "* information" that suggests us to reject the variable T.
+
+
+
